@@ -1,0 +1,15 @@
+[model]
+name = "gpt-4.1-mini"
+
+[fhir]
+fhir_schema = "R4"
+base_url = "http://127.0.0.1:8080/csp/healthshare/demo/fhir/r4/"
+prefer = "representation"
+auth = "BasicAuth"
+username = "_System"
+password = "ISCDEMO"
+
+
+[mcp_servers.filesyste]
+command = "npx"
+args =['-y', '@modelcontextprotocol/server-filesystem', '/Users/pjamieso/claude/ai-agent', '/tmp']

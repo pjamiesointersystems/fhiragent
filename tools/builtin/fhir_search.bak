@@ -1,0 +1,366 @@
+import json
+from config.config import Config
+from utils.codes.snomed import lookup_snomed
+from utils.codes.rxnorm import lookup_rxnorm
+from utils.codes.loinc import lookup_loinc
+from tools.base import Tool, ToolInvocation, ToolKind, ToolResult
+from pydantic import BaseModel, Field, ValidationError
+from urllib.parse import parse_qsl, urljoin, urlparse
+from typing import Any
+import httpx
+from httpx import BasicAuth
+from enum import Enum
+
+class ClinicalDomain(str, Enum):
+    condition = "condition"
+    observation = "observation"
+    medication = "medication"
+    allergy = "allergy"
+
+
+
+
+class FHIRSearchParams(BaseModel):
+    resource_type: str = Field(..., description="FHIR resource type to search (e.g., 'Patient', 'Observation', 'Encounter')",
+        examples=["Patient", "Observation"])
+   # ✅ LLM-friendly: key/value map
+    search: dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "FHIR search parameters as key/value pairs. "
+            "Example: {'name': 'Smith', 'gender': 'female', '_count': '10'}"
+        ),
+    )
+    # Optional escape hatch for power users
+    query_string: str | None = Field(
+        default=None,
+        description=(
+            "Optional raw query string like 'name=Smith&gender=female'. "
+            "If provided, merged with 'search' (search wins on conflicts). "
+            "Do NOT include leading '?', and do NOT include the resource type."
+        ),
+    )
+
+    timeout: int = Field(
+        30,
+        ge=5,
+        le=120,
+        description="Request timeout in seconds (default: 120)",
+    )
+    max_results: int = Field(
+        10,
+        ge=1,
+        le=200,
+        description="Maximum results to return (default: 200)",
+    )
+
+    # NEW: natural-language “diagnosis” / “code” phrase
+    code_text: str | None = Field(
+        default=None,
+        description="Optional natural-language clinical term (e.g. 'type 2 diabetes'). "
+        "If present, the tool resolves it to a token (system|code). "
+        "If resource_type is Patient and follow_reverse is true, prefer _has reverse-chaining "
+        "to find Patients with evidence on Condition/Observation/Medication/Allergy resources. "
+        "Requires clinical_domain."
+    )
+
+    clinical_domain: ClinicalDomain | None = Field(
+    default=None,
+    description="Indicates the type of clinical concept for terminology resolution. "
+        "condition -> SNOMED CT, "
+        "observation -> LOINC, "
+        "medication -> RxNorm, "
+        "allergy -> SNOMED CT."
+    )
+
+    # new optional flag to auto-follow reverse-chaining when possible
+    follow_reverse: bool = Field(
+        default=True,
+        description=(
+        "If true and resource_type is a *parent* resource (especially Patient), "
+        "rewrite natural-language cohort requests like 'patients with <condition/observation/medication>' "
+        "to use FHIR reverse-chaining with the _has parameter.\n\n"
+        "When resource_type is Patient and a clinical_domain is provided, do NOT use code= on Patient. Use _has."
+        "Use this when the clinical evidence lives on another resource (Condition, Observation, "
+        "MedicationRequest/MedicationStatement, AllergyIntolerance) and you want matching Patients.\n\n"
+        "Rules of thumb:\n"
+        "- If resource_type == 'Patient' and clinical_domain == 'condition', prefer:\n"
+        "  Patient?_has:Condition:patient:code=<system|code>\n"
+        "- If resource_type == 'Patient' and clinical_domain == 'allergy', prefer:\n"
+        "  Patient?_has:AllergyIntolerance:patient:code=<system|code>\n"
+        "- If resource_type == 'Patient' and clinical_domain == 'observation', prefer:\n"
+        "  Patient?_has:Observation:subject:code=<system|code>\n"
+        "- If resource_type == 'Patient' and clinical_domain == 'medication', prefer (server-dependent):\n"
+        "  Patient?_has:MedicationRequest:subject:medication=<system|code>  (or medication.code)\n\n"
+        "Only apply this rewrite if the caller did NOT already provide an explicit _has parameter.\n\n"
+        "Examples:\n"
+        "- 'patients with type 2 diabetes' => "
+        "Patient?_has:Condition:patient:code=http://snomed.info/sct|44054006\n"
+        "- 'patients with HbA1c' => "
+        "Patient?_has:Observation:subject:code=http://loinc.org|4548-4\n"
+    ),
+    )
+
+
+    def validate_code_text(self) -> None:
+        if self.code_text and not self.clinical_domain:
+            raise ValueError("clinical_domain is required when code_text is provided")
+
+    def build_query_params(self) -> dict[str, str]:
+        """
+        Merge query_string + search, then enforce _count <= max_results.
+        """
+        qp: dict[str, str] = {}
+
+        if self.query_string:
+            # parse_qsl handles "a=1&b=2"
+            qp.update({k: v for (k, v) in parse_qsl(self.query_string, keep_blank_values=True)})
+
+        # explicit dict overrides query_string
+        qp.update(self.search or {})
+
+        # Enforce _count, respecting a smaller user-provided value
+        requested_count: int | None = None
+        if "_count" in qp:
+            try:
+                requested_count = int(qp["_count"])
+            except ValueError:
+                requested_count = None
+
+        if requested_count is None:
+            qp["_count"] = str(self.max_results)
+        else:
+            qp["_count"] = str(min(requested_count, self.max_results))
+
+        return qp
+
+
+
+class FHIRSearchTool(Tool):
+    name = "fhir_search"
+    description = "Search a fhir repository for FHIR resources. Returns a searchset bundle."
+    kind = ToolKind.NETWORK
+    schema = FHIRSearchParams
+   
+
+    def __init__(self, config: Config):
+        self.config = config
+        self.enabled = True
+        self.headers = {
+        "Accept": "*/*",
+        # "content-type": "application/fhir+json",
+        "Accept-Encoding": "gzip, deflate, br",
+        }
+
+        if not self.config.fhir:
+            self.enabled = False
+
+    def _apply_reverse_chaining(
+        resource_type: str,
+        clinical_domain: ClinicalDomain | None,
+        follow_reverse: bool,
+        query_params: dict[str, str],
+        token: str | None) -> dict[str, str]:
+            """
+            If searching Patient cohorts by condition/observation/medication/allergy,
+            rewrite query params to use _has reverse chaining.
+
+            Returns a NEW dict (does not mutate original).
+            """
+            qp = dict(query_params)
+
+            if not follow_reverse:
+                return qp
+            if (resource_type or "").lower() != "patient":
+                return qp
+            if not token or not clinical_domain:
+                return qp
+
+            # If user already provided an explicit _has, do nothing
+            if any(k.startswith("_has:") for k in qp.keys()):
+                return qp
+
+            # Never use 'code' directly on Patient for these cohort queries
+            qp.pop("code", None)
+
+            if clinical_domain == ClinicalDomain.condition:
+                qp["_has:Condition:patient:code"] = token
+            elif clinical_domain == ClinicalDomain.allergy:
+                qp["_has:AllergyIntolerance:patient:code"] = token
+            elif clinical_domain == ClinicalDomain.observation:
+                qp["_has:Observation:subject:code"] = token
+            elif clinical_domain == ClinicalDomain.medication:
+                # This varies by server/profile; start with MedicationRequest
+                qp["_has:MedicationRequest:subject:medication"] = token
+
+            return qp
+
+    @staticmethod
+    def _is_param_not_supported(payload: object, param_name: str) -> bool:
+        """
+        Detect InterSystems-style OperationOutcome for unsupported parameter.
+        """
+        if not isinstance(payload, dict):
+            return False
+        if payload.get("resourceType") != "OperationOutcome":
+            return False
+
+        issues = payload.get("issue") or []
+        for issue in issues:
+            details = (issue or {}).get("details") or {}
+            text = (details.get("text") or "") if isinstance(details, dict) else ""
+            diagnostics = (issue or {}).get("diagnostics") or ""
+            if "ParameterNotSupported" in str(diagnostics) and f"'{param_name}'" in str(text):
+                return True
+        return False
+    
+        
+
+    async def execute(self, invocation: ToolInvocation) -> ToolResult:
+       
+        try:
+            params = FHIRSearchParams(**invocation.params)
+            params.validate_code_text()
+        except (ValidationError, ValueError) as e:
+            return ToolResult.error_result(f"Invalid tool parameters:\n{e}")
+
+
+        fhir = getattr(self.config, "fhir", None)
+        if not fhir or not getattr(fhir, "base_url", None):
+            return ToolResult.error_result(
+                "FHIR config missing or base_url not set. Add a [fhir] section in config.toml."
+            )
+
+        auth = None
+
+        if fhir.auth == "BasicAuth":
+            username = fhir.resolved_username()
+            password = fhir.resolved_password()
+
+            if not username or not password:
+                return ToolResult.error_result("BasicAuth requires fhir.username and fhir.password")
+
+            auth = BasicAuth(username, password)
+
+        base = fhir.base_url.rstrip("/") + "/"
+        url = urljoin(base, params.resource_type)
+
+        headers = dict(self.headers)
+        # if getattr(fhir, "prefer", None):
+        #     headers["Prefer"] = fhir.prefer
+
+        query_params = params.build_query_params()
+        token = None
+       # Resolve natural-language term to a coded token (system|code) when possible
+        if params.code_text and params.clinical_domain:
+            token = None
+
+            if params.clinical_domain in (ClinicalDomain.condition, ClinicalDomain.allergy):
+                token = lookup_snomed(params.code_text)
+            elif params.clinical_domain == ClinicalDomain.observation:
+                token = lookup_loinc(params.code_text)
+            elif params.clinical_domain == ClinicalDomain.medication:
+                token = lookup_rxnorm(params.code_text)
+
+        if token:
+            # Don't overwrite if caller already provided an explicit code
+            query_params.setdefault("code", token)
+
+        try:
+            timeout = httpx.Timeout(params.timeout)
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.get(url, params=query_params, headers=headers, auth=auth)
+                full_url = httpx.URL(url, params=query_params)
+                payload = response.json()
+
+                # If server returned an OperationOutcome complaining about 'code', retry once using _has
+                if (
+                    params.follow_reverse
+                    and params.resource_type.lower() == "patient"
+                    and "code" in query_params
+                    and self._is_param_not_supported(payload, "code")
+                    and token):
+                        query_params_retry = self._apply_reverse_chaining(
+                        resource_type=params.resource_type,
+                        clinical_domain=params.clinical_domain,
+                        follow_reverse=True,
+                        query_params=query_params,
+                        token=token,
+                    )
+                        response = await client.get(url, params=query_params_retry, headers=headers, auth=auth)
+                        full_url = httpx.URL(url, params=query_params_retry)
+                        payload = response.json()
+
+                response.raise_for_status()
+
+                # ✅ parse JSON (FHIR should be application/fhir+json, but we’ll be tolerant)
+                payload: Any = response.json()
+
+        except httpx.HTTPStatusError as e:
+            return ToolResult.error_result(
+                f"""
+        HTTP {e.response.status_code}: {e.response.reason_phrase}
+
+        Request URL:
+        {e.request.url}
+
+        Request Headers:
+        {dict(e.request.headers)}
+
+        Response Headers:
+        {dict(e.response.headers)}
+
+        Response Body:
+        {e.response.text}
+        """
+            )
+        except json.JSONDecodeError:
+            # Server returned non-JSON; fall back to text for debugging
+            return ToolResult.error_result("FHIR server returned non-JSON response.", )
+
+
+        # ✅ compute bundle metadata
+        entry_count = None
+        bundle_type = None
+        total = None
+
+        if isinstance(payload, dict) and payload.get("resourceType") == "Bundle":
+            bundle_type = payload.get("type")
+            total = payload.get("total")
+            entries = payload.get("entry") or []
+            if isinstance(entries, list):
+                entry_count = len(entries)
+            else:
+                entry_count = 0  # unexpected shape
+
+        # ✅ choose what to return as tool content
+        # For agents, returning JSON string is usually better than raw text.
+        content = json.dumps(payload, indent=2, ensure_ascii=False)
+
+        # keep your truncation behavior (truncate content, not payload)
+        if len(content) > 1000 * 1024:
+            content = content[: 1000 * 1024] + "\n... [content truncated]"
+
+        # Optional: warn if it’s not a searchset bundle
+        warning = None
+        if bundle_type is not None and bundle_type != "searchset":
+            warning = f"Expected Bundle.type='searchset' but got '{bundle_type}'."
+
+        return ToolResult.success_result(
+            content,
+            metadata={
+                "status_code": response.status_code,
+                "content_length": len(response.content),
+                "resource_type": params.resource_type,
+                "url": str(full_url),
+                "requested_count": query_params.get("_count"),
+
+                # ✅ FHIR-specific metadata
+                "bundle_type": bundle_type,
+                "entry_count": entry_count,
+                "total": total,
+
+                # optional hint for the agent/operator
+                "warning": warning,
+            },
+        )

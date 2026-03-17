@@ -1,0 +1,12 @@
+[model]
+name = "gpt-4.1-mini"
+
+[fhir]
+schema = "R4"
+base_url = "http://127.0.0.1:8080/csp/healthshare/demo/fhir/r4/"
+prefer = "representation"
+auth = "BasicAuth"
+username = "SYS"
+password = "ISCDEMO"
+
+
