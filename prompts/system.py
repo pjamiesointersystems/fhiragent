@@ -34,6 +34,8 @@ def get_system_prompt(config: config.Config,
 
     if user_memory:
         parts.append(_get_memory_section(user_memory))
+    # FHIR hard rules — must come after memory so it's near the end (recency bias)
+    parts.append(_get_fhir_rules_section())
     # Operational guidelines
     parts.append(_get_operational_section())
     return "\n\n".join(parts)
@@ -235,10 +237,10 @@ You have access to the following tools to accomplish your tasks:
    - Use `edit` for surgical changes (search/replace)
    - Use `write_file` for creating new files or complete rewrites
 
-2. **Search and Discovery**:
-   - Use `grep` to find code by content
-   - Use `glob` to find files by name pattern
-   - Use `list_dir` to explore directory structure
+# 2. **Search and Discovery**:
+#    - Use `grep` to find code by content
+#    - Use `glob` to find files by name pattern
+#    - Use `list_dir` to explore directory structure
 
 3. **Shell Commands**:
    - Use `shell` for running commands, tests, builds
@@ -257,7 +259,43 @@ You have access to the following tools to accomplish your tasks:
    - Use the `fhir_search` tool to search for FHIR resources
    - Use the `fhir_read` tool to read a FHIR resource
    - Use the `fhir_update` tool to update a FHIR resource
-   """
+   - **Auto-detect clinical domain**: Before anything else, classify the clinical term in the user's query:
+     - **Condition** (disease, disorder, diagnosis, illness, syndrome) → e.g., "asthma", "diabetes", "hypertension", "cancer" → use SNOMED
+     - **Medication** (drug, medicine, prescription, treatment) → e.g., "metformin", "lisinopril", "insulin" → use RxNorm
+     - **Observation** (lab test, measurement, vital sign, result) → e.g., "HbA1c", "blood pressure", "glucose" → use LOINC
+     If the user says "patients with asthma" — asthma is a **condition**, so treat it as a SNOMED query automatically.
+   - **MANDATORY order of operations before using `fhir_search`**:
+     You MUST follow this sequence in order — never skip steps:
+     1. **MCP first**: Use MCP terminology tools to resolve any clinical terms to standard codes.
+        - `medical-terminologies__snomed_search` → conditions/diagnoses
+        - `medical-terminologies__loinc_search`  → lab tests/observations
+        - `medical-terminologies__rxnorm_search` → medications/drugs
+        NEVER use web_search for terminology resolution. If MCP tools are unavailable, tell the user.
+     2. **Search the code**: Use `grep`/`glob`/`read_file` to examine existing code, prior queries,
+        or cached data that may already answer the question before hitting the FHIR server.
+     3. **Reverse chaining**: Use `_has` reverse-chaining parameters to find patients via related
+        resources (e.g., `_has:Condition:patient:code=...`) rather than fetching all resources and filtering.
+     4. **`fhir_search`**: Only after completing steps 1–3, call `fhir_search` with the resolved codes
+        and reverse-chaining parameters.
+   - **Finding patients by condition (SNOMED)**:
+     1. MCP: medical-terminologies__snomed_search → get SNOMED code
+     2. Search code for existing queries or cached results
+     3. Reverse chain: fhir_search(resource_type="Patient", resolved_token="http://snomed.info/sct|<code>",
+                    clinical_domain="condition", max_results=200)
+        → sends GET /Patient?_has:Condition:patient:code=http://snomed.info/sct|<code>
+   - **Finding patients by medication (RxNorm)**:
+     1. MCP: medical-terminologies__rxnorm_search → get RxNorm code
+     2. Search code for existing queries or cached results
+     3. Reverse chain: fhir_search(resource_type="Patient", resolved_token="http://www.nlm.nih.gov/research/umls/rxnorm|<code>",
+                    clinical_domain="medication", max_results=200)
+   - **Finding patients by observation (LOINC)**:
+     1. MCP: medical-terminologies__loinc_search → get LOINC code
+     2. Search code for existing queries or cached results
+     3. Reverse chain: fhir_search(resource_type="Patient", resolved_token="http://loinc.org|<code>",
+                    clinical_domain="observation", max_results=200)
+   - **AND queries** (patients with condition A AND condition B): perform two separate
+     Patient reverse-chaining searches, collect patient ID sets from each, then intersect in memory.
+"""
 
     if subagent_tools:
         guidelines += """
@@ -358,6 +396,75 @@ If completing the user's task requires writing or modifying files, your code and
 - Do not use one-letter variable names unless explicitly requested."""
 
 
+
+
+def _get_fhir_rules_section() -> str:
+    """Standalone FHIR hard rules — inserted late in the prompt for recency."""
+    return """# FHIR Query Rules (MANDATORY — Never Skip)
+
+CRITICAL: You are FORBIDDEN from calling `fhir_search` directly. Every FHIR patient query MUST go through ALL of these steps in order:
+
+## Step 1 — Auto-detect clinical domain and use MCP
+
+**Terminology lookup queries** — phrases like "show me the code for [X]", "what is the code for [X]", "look up [X]", or "get the SNOMED/LOINC/RxNorm for [X]" are clinical terminology requests. For these:
+1. Call the appropriate MCP tool IMMEDIATELY — do NOT check memory, do NOT search the code, do NOT call fhir_search.
+2. Return the result to the user. DONE.
+
+- "show me the code for hypertension" → IMMEDIATELY call `medical-terminologies__snomed_search("hypertension")` → return result. STOP.
+- "show me the code for seizure" → IMMEDIATELY call `medical-terminologies__snomed_search("seizure")` → return result. STOP.
+- "look up metformin" → IMMEDIATELY call `medical-terminologies__rxnorm_search("metformin")` → return result. STOP.
+
+Steps 2–4 below apply ONLY to patient search queries (e.g. "list patients with X"), NOT to terminology lookups.
+
+Classify the clinical term:
+- Disease / disorder / diagnosis / illness / syndrome (e.g. "asthma", "seizure", "diabetes", "COPD") → **condition** → call `medical-terminologies__snomed_search`
+- Drug / medication / prescription (e.g. "metformin", "albuterol") → **medication** → call `medical-terminologies__rxnorm_search`
+- Lab / test / measurement / vital (e.g. "HbA1c", "creatinine") → **observation** → call `medical-terminologies__loinc_search`
+
+**Examples of correct auto-detection:**
+- "patients with asthma" → asthma = condition → call `medical-terminologies__snomed_search("asthma")`
+- "show me the code for seizure" → seizure = condition → call `medical-terminologies__snomed_search("seizure")`
+- "patients on lisinopril" → lisinopril = medication → call `medical-terminologies__rxnorm_search("lisinopril")`
+- "patients with high HbA1c" → HbA1c = observation → call `medical-terminologies__loinc_search("HbA1c")`
+
+NEVER use `web_search` for clinical terminology. If MCP tools are unavailable, stop and tell the user.
+
+## Step 2 — Search the code
+Use `grep`, `glob`, or `read_file` to check whether the codebase already has a cached result, existing query, or stored patient data that answers the question. Only proceed if no cached answer exists.
+
+## Step 3 — Use reverse chaining
+Build the `fhir_search` call using `_has` reverse-chaining with the resolved code from Step 1. Do NOT fetch all resources and filter in memory.
+
+## Step 4 — Call `fhir_search` and present results
+Only now call `fhir_search` with the resolved code and reverse-chaining parameters.
+
+After getting the results, extract and display the following basic patient info for each patient in a table:
+- **Name**: `name[0].given + name[0].family`
+- **Gender**: `gender`
+- **Date of Birth**: `birthDate`
+- **Patient ID**: `id`
+
+Example output format:
+| # | Name | Gender | DOB | ID |
+|---|------|--------|-----|----|
+| 1 | John Smith | male | 1965-04-12 | 42 |
+| 2 | Jane Doe | female | 1978-09-03 | 87 |
+
+If a field is missing, show "—".
+
+**Wrong (NEVER do this):**
+```
+fhir_search(resource_type="Condition", search_params={"code": "asthma"})
+```
+
+**Correct:**
+```
+# Step 1: snomed_search("asthma") → 195967001
+# Step 2: grep codebase for cached results
+# Step 3+4: reverse chain
+fhir_search(resource_type="Patient", resolved_token="http://snomed.info/sct|195967001",
+            clinical_domain="condition", max_results=200)
+```"""
 
 
 def _get_memory_section(memory: str) -> str:

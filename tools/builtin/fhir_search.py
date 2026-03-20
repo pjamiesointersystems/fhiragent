@@ -50,14 +50,14 @@ class FHIRSearchParams(BaseModel):
     timeout: int = Field(30, ge=5, le=120, description="Request timeout in seconds")
     max_results: int = Field(10, ge=1, le=200, description="Maximum results to return")
 
-    code_text: str | None = Field(
+    resolved_token: str | None = Field(
         default=None,
         description=(
-            "Optional natural-language clinical term (e.g. 'type 2 diabetes'). "
-            "If present, the tool resolves it to a token (system|code). "
-            "If resource_type is Patient and follow_reverse is true, use _has reverse-chaining "
-            "to find Patients with evidence on Condition/Observation/Medication/Allergy resources. "
-            "Requires clinical_domain."
+            "Pre-resolved terminology token in 'system|code' format, e.g. "
+            "'http://snomed.info/sct|709044004'. "
+            "Use this after resolving a clinical term via MCP terminology tools. "
+            "When provided with clinical_domain and resource_type=Patient, triggers "
+            "_has reverse-chaining to find patients with matching conditions/observations/medications."
         ),
     )
 
@@ -78,10 +78,6 @@ class FHIRSearchParams(BaseModel):
             "do NOT use code= on Patient; use _has instead."
         ),
     )
-
-    def validate_code_text(self) -> None:
-        if self.code_text and not self.clinical_domain:
-            raise ValueError("clinical_domain is required when code_text is provided")
 
     def build_query_params(self) -> dict[str, str]:
         """Merge query_string + search, then enforce _count <= max_results."""
@@ -139,7 +135,19 @@ class FHIRSearchTool(Tool):
             return qp
         if (resource_type or "").lower() != "patient":
             return qp
-        if not token or not clinical_domain:
+        if not token:
+            return qp
+
+        # Auto-detect clinical domain from token URL if not explicitly provided
+        if clinical_domain is None:
+            if "snomed.info/sct" in token:
+                clinical_domain = ClinicalDomain.condition
+            elif "loinc.org" in token:
+                clinical_domain = ClinicalDomain.observation
+            elif "rxnorm" in token or "nlm.nih.gov" in token:
+                clinical_domain = ClinicalDomain.medication
+
+        if clinical_domain is None:
             return qp
 
         # If user already provided an explicit _has, do nothing
@@ -206,7 +214,6 @@ class FHIRSearchTool(Tool):
         reverse_chaining_param_key = None
         try:
             params = FHIRSearchParams(**invocation.params)
-            params.validate_code_text()
         except (ValidationError, ValueError) as e:
             return ToolResult.error_result(f"Invalid tool parameters:\n{e}")
 
@@ -231,15 +238,8 @@ class FHIRSearchTool(Tool):
 
         query_params = params.build_query_params()
 
-        # Resolve natural-language term to a coded token (system|code)
-        token: str | None = None
-        # if params.code_text and params.clinical_domain:
-        #     if params.clinical_domain in (ClinicalDomain.condition, ClinicalDomain.allergy):
-        #         token = lookup_snomed(params.code_text)
-        #     elif params.clinical_domain == ClinicalDomain.observation:
-        #         token = lookup_loinc(params.code_text)
-        #     elif params.clinical_domain == ClinicalDomain.medication:
-        #         token = lookup_rxnorm(params.code_text)
+        # Use pre-resolved token from MCP terminology tools (passed in by the LLM)
+        token: str | None = params.resolved_token
 
         # Apply reverse chaining FIRST for Patient cohorts
         query_params = self._apply_reverse_chaining(

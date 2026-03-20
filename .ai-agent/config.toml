@@ -1,4 +1,5 @@
 hooks_enabled = true
+allowed_tools = ["edit", "fhir_everything", "fhir_read", "fhir_search", "fhir_update", "glob", "list_dir", "read_file", "shell", "todos", "web_fetch", "web_search", "write_file", "medical-terminologies__snomed_search", "medical-terminologies__loinc_search", "medical-terminologies__rxnorm_search"]
 
 [model]
 name = "gpt-4.1-mini"
@@ -21,7 +22,10 @@ name='test_before_agent'
 trigger='before_agent'
 command='python3 ./scripts/test_tool.py'
 
-
 [mcp_servers.filesystem]
 command = "npx"
 args =['-y', '@modelcontextprotocol/server-filesystem', '/Users/pjamieso/claude/ai-agent', '/tmp']
+
+[mcp_servers.medical-terminologies]
+command = "/opt/homebrew/bin/npx"
+args = ["-y", "medical-terminologies-mcp"]
