@@ -77,7 +77,12 @@ class FHIRSearchParams(BaseModel):
             "If true and resource_type is a parent resource (especially Patient), rewrite cohort-style requests "
             "like 'patients with <condition/observation/medicationrequest/allergy>' to use FHIR reverse-chaining "
             "with the _has parameter. When resource_type is Patient and a clinical_domain is provided, "
-            "do NOT use code= on Patient; use _has instead."
+            "do NOT use code= on Patient; use _has instead. "
+            "IMPORTANT: _has reverse-chaining does NOT support value filtering (e.g. 'cholesterol > 200', "
+            "'BMI > 30', 'pain score >= 7'). For numeric threshold queries, set follow_reverse=false and "
+            "search the clinical resource directly (resource_type='Observation') with the value-quantity "
+            "parameter in 'search', e.g. search={'code': 'http://loinc.org|2093-3', 'value-quantity': 'gt200|mg/dL'}. "
+            "Then extract patient references from the returned Observation entries."
         ),
     )
 
