@@ -1,0 +1,235 @@
+Prompt String: create a summary of just the heart rate observations of patient 1 in the fhir repository.
+Correct Search: [base]Observation?subject=Patient%2F1&code=8867-4&_count=50
+
+Prompt String: find all patients in the fhir repository with type 2 diabetes mellitus
+Correct Search: [base]Patient?_count=100&_has%3ACondition%3Apatient%3Acode=http%3A%2F%2Fsnomed.info%2Fsct%7C440540
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+
+Prompt String:
+Correct Search:
+

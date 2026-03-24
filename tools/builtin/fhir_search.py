@@ -34,6 +34,8 @@ class FHIRSearchParams(BaseModel):
         description=(
             "FHIR search parameters as key/value pairs. "
             "Example: {'name': 'Smith', 'gender': 'female', '_count': '10'}"
+            "When searching Observations, MedicationRequests, AllergyIntolerances, and the Subject is a Patient"
+            "with a FHIR Id, example Patient 5, the format for the search parameter i.e. the subject is Patient/5"
         ),
     )
 
