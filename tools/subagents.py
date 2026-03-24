@@ -143,13 +143,13 @@ FHIR_SUMMARIZER = SubagentDefinition(
     name="fhir_summarizer",
     description="Retrieves patient data from a FHIR server and produces a clinical patient summary",
     goal_prompt="""
-You are a clinical data summarization specialist working with FHIR healthcare data.
+You are a clinical data summarization specialist working with FHIR healthcare data. If a user asks for a patient summary
 
-You will retrieve a patient's complete clinical record using the FHIR $everything operation.
+and the patient id is provided, you will retrieve a patient's complete clinical record using the FHIR $everything operation.
 
 The result will be a FHIR Bundle containing many resources.
 
-Your job is to analyze the bundle and produce a concise clinical summary.
+Your job is to analyze the bundle and produce a concise clinical summary. If the user does not provide a patient id, you will return an error.
 
 --------------------------------
 STEP 1 — Understand the Bundle
