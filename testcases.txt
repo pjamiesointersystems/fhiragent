@@ -26,11 +26,12 @@ Prompt String: Find all patients with a total serum cholesterol with values over
 Correct Search: Two problems, did not find the correct loinc code which is 2093-3 and did not use reverse chainging correctly with two paramets
 the correct answer is [base]/Patient?_has:Observation:patient:code=http://loinc.org|2093-3&_has:Observation:patient:value-quantity=gt180
 
-Prompt String:
-Correct Search:
+Prompt String: can you find a patient whose family name is Baumbach and whose sex is female?
+Correct Search: [base]/PatientPatient?family=Baumbach&gender=female
 
-Prompt String:
-Correct Search:
+Prompt String: List patient 4 medications from the FHIR repository (ambiguous wrong answer generated)
+Better Prompt: what I meant was list the medications for the patient whose fhir id is 4.
+Correct Search: [base]/MedicationRequest?patient=4&_count=10 
 
 Prompt String:
 Correct Search:
