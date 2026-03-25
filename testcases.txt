@@ -4,26 +4,27 @@ Correct Search: [base]Observation?subject=Patient%2F1&code=8867-4&_count=50
 Prompt String: find all patients in the fhir repository with type 2 diabetes mellitus
 Correct Search: [base]Patient?_count=100&_has%3ACondition%3Apatient%3Acode=http%3A%2F%2Fsnomed.info%2Fsct%7C440540
 
-Prompt String:
-Correct Search:
+Prompt String: give me the details on Patient 4
+Correct Search: [base]/Patient/4
 
-Prompt String:
-Correct Search:
+Prompt String: I would like to see all the patients in the FHIR repository whose last name is Larson
+Correct Search: [base]/Patient?name=Larson&_count=50 
 
-Prompt String:
-Correct Search:
+Prompt String: Can you generate a list of patients with type 2 diabetes mellitus?
+Correct Search: Patient?_count=50&_has%3ACondition%3Apatient%3Acode=http%3A%2F%2Fsnomed.info%2Fsct%7C44054006
 
-Prompt String:
-Correct Search:
+Prompt String: for patient 4 change his ssnum from 999-89-3043 to 999-89-3044
+Correct Operation: FHIR Update -- a FHIR read operation occurs under the hood
 
-Prompt String:
-Correct Search:
+Prompt String: get me all resources on patient 4 using a $everything operation
+Correct Search: [base] Patient/4/$everything
 
-Prompt String:
-Correct Search:
+Prompt String: can you create a comprehensive patient summary of patient 4?
+Correct Search: uses [base] Patient/4/$everything and then Bundle extractor to create formatted summary
 
-Prompt String:
-Correct Search:
+Prompt String: Find all patients with a total serum cholesterol with values over 180 mg/dL 
+Correct Search: Two problems, did not find the correct loinc code which is 2093-3 and did not use reverse chainging correctly with two paramets
+the correct answer is [base]/Patient?_has:Observation:patient:code=http://loinc.org|2093-3&_has:Observation:patient:value-quantity=gt180
 
 Prompt String:
 Correct Search:

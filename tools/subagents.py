@@ -141,7 +141,7 @@ Do NOT modify any files.""",
 )
 FHIR_SUMMARIZER = SubagentDefinition(
     name="fhir_summarizer",
-    description="Retrieves patient data from a FHIR server and produces a clinical patient summary",
+    description="Automatically retrieves comprehensive patient data from a FHIR server, including demographics, clinical conditions, medications, allergies, and encounters, and generates a clear, concise, and clinically relevant patient summary report.",
     goal_prompt="""
 You are a clinical data summarization specialist working with FHIR healthcare data. If a user asks for a patient summary
 

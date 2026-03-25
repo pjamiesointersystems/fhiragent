@@ -34,6 +34,49 @@ Accept-Encoding: gzip, deflate, br
 Prefer: return=representation
 
 ###
+
+GET http://127.0.0.1:8080/csp/healthshare/demo/fhir/r4/Observation?code==http://loinc.org|14647-2
+Authorization: Basic _System:ISCDEMO
+Accept: */*
+content-type: application/fhir+json
+Accept-Encoding: gzip, deflate, br
+Prefer: return=representation
+
+###G
+
+GET http://127.0.0.1:8080/csp/healthshare/demo/fhir/r4/Patient?_has:Observation:patient:code=http://loinc.org|2093-3&_has:Observation:patient:value-quantity=gt180
+Authorization: Basic _System:ISCDEMO
+Accept: */*
+content-type: application/fhir+json
+Accept-Encoding: gzip, deflate, br
+Prefer: return=representation
+
+###
+
+GET http://127.0.0.1:8080/csp/healthshare/demo/fhir/r4/Observation?code=http://loinc.org|2093-3
+Authorization: Basic _System:ISCDEMO
+Accept: */*
+content-type: application/fhir+json
+Accept-Encoding: gzip, deflate, br
+Prefer: return=representation
+
+###
+
+GET http://127.0.0.1:8080/csp/healthshare/demo/fhir/r4/Observation?subject=Patient/12273&code=http://loinc.org|2093-3
+Authorization: Basic _System:ISCDEMO
+Accept: */*
+content-type: application/fhir+json
+Accept-Encoding: gzip, deflate, br
+Prefer: return=representation
+
+###
+Authorization: Basic _System:ISCDEMO
+Accept: */*
+content-type: application/fhir+json
+Accept-Encoding: gzip, deflate, br
+Prefer: return=representation
+
+###
 GET http://127.0.0.1:8080/csp/healthshare/demo/fhir/r4/MedicationRequest/70298
 Authorization: Basic _System:ISCDEMO
 Accept: */*
