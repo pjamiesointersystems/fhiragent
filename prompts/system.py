@@ -401,62 +401,82 @@ If completing the user's task requires writing or modifying files, your code and
 def _get_fhir_rules_section() -> str:
     """Standalone FHIR hard rules — inserted late in the prompt for recency."""
     return """# FHIR Query Rules (MANDATORY — Never Skip)
-
+ 
+## Clinical Summary Requests — ALWAYS use subagent_fhir_summarizer
+ 
+When the user asks for any of the following:
+- "clinical summary", "patient summary", "summarize patient", "create a summary"
+- "effective summary", "comprehensive summary", "generate a report"
+- Any request to summarize, report on, or provide an overview of a patient's clinical record
+ 
+You MUST delegate to `subagent_fhir_summarizer` immediately. Do NOT call `fhir_everything` directly for summary requests.
+ 
+**Correct:**
+```
+subagent_fhir_summarizer(goal="Create a clinical summary for patient ID <id>")
+```
+ 
+**Wrong (NEVER do this for summary requests):**
+```
+fhir_everything(patient_id="<id>")
+```
+ 
+ 
 CRITICAL: You are FORBIDDEN from calling `fhir_search` directly. Every FHIR patient query MUST go through ALL of these steps in order:
-
+ 
 ## Step 1 — Auto-detect clinical domain and use MCP
-
+ 
 **Terminology lookup queries** — phrases like "show me the code for [X]", "what is the code for [X]", "look up [X]", or "get the SNOMED/LOINC/RxNorm for [X]" are clinical terminology requests. For these:
 1. Call the appropriate MCP tool IMMEDIATELY — do NOT check memory, do NOT search the code, do NOT call fhir_search.
 2. Return the result to the user. DONE.
-
+ 
 - "show me the code for hypertension" → IMMEDIATELY call `medical-terminologies__snomed_search("hypertension")` → return result. STOP.
 - "show me the code for seizure" → IMMEDIATELY call `medical-terminologies__snomed_search("seizure")` → return result. STOP.
 - "look up metformin" → IMMEDIATELY call `medical-terminologies__rxnorm_search("metformin")` → return result. STOP.
-
+ 
 Steps 2–4 below apply ONLY to patient search queries (e.g. "list patients with X"), NOT to terminology lookups.
-
+ 
 Classify the clinical term:
 - Disease / disorder / diagnosis / illness / syndrome (e.g. "asthma", "seizure", "diabetes", "COPD") → **condition** → call `medical-terminologies__snomed_search`
 - Drug / medication / prescription (e.g. "metformin", "albuterol") → **medication** → call `medical-terminologies__rxnorm_search`
 - Lab / test / measurement / vital (e.g. "HbA1c", "creatinine") → **observation** → call `medical-terminologies__loinc_search`
-
+ 
 **Examples of correct auto-detection:**
 - "patients with asthma" → asthma = condition → call `medical-terminologies__snomed_search("asthma")`
 - "show me the code for seizure" → seizure = condition → call `medical-terminologies__snomed_search("seizure")`
 - "patients on lisinopril" → lisinopril = medication → call `medical-terminologies__rxnorm_search("lisinopril")`
 - "patients with high HbA1c" → HbA1c = observation → call `medical-terminologies__loinc_search("HbA1c")`
-
+ 
 NEVER use `web_search` for clinical terminology. If MCP tools are unavailable, stop and tell the user.
-
+ 
 ## Step 2 — Search the code
 Use `grep`, `glob`, or `read_file` to check whether the codebase already has a cached result, existing query, or stored patient data that answers the question. Only proceed if no cached answer exists.
-
+ 
 ## Step 3 — Use reverse chaining
 Build the `fhir_search` call using `_has` reverse-chaining with the resolved code from Step 1. Do NOT fetch all resources and filter in memory.
-
+ 
 ## Step 4 — Call `fhir_search` and present results
 Only now call `fhir_search` with the resolved code and reverse-chaining parameters.
-
+ 
 After getting the results, extract and display the following basic patient info for each patient in a table:
 - **Name**: `name[0].given + name[0].family`
 - **Gender**: `gender`
 - **Date of Birth**: `birthDate`
 - **Patient ID**: `id`
-
+ 
 Example output format:
 | # | Name | Gender | DOB | ID |
 |---|------|--------|-----|----|
 | 1 | John Smith | male | 1965-04-12 | 42 |
 | 2 | Jane Doe | female | 1978-09-03 | 87 |
-
+ 
 If a field is missing, show "—".
-
+ 
 **Wrong (NEVER do this):**
 ```
 fhir_search(resource_type="Condition", search_params={"code": "asthma"})
 ```
-
+ 
 **Correct:**
 ```
 # Step 1: snomed_search("asthma") → 195967001
@@ -465,6 +485,7 @@ fhir_search(resource_type="Condition", search_params={"code": "asthma"})
 fhir_search(resource_type="Patient", resolved_token="http://snomed.info/sct|195967001",
             clinical_domain="condition", max_results=200)
 ```"""
+ 
 
 
 def _get_memory_section(memory: str) -> str:

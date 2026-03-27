@@ -1,0 +1,8 @@
+Topics to cover in the demo of the AI agent
+Show how the system is started with the command uv run main.py (explain that uv is a cool superfast package manager)
+Show the /help that provides information on chaning the model, listing tools, mcp servers, and stats
+Show the /config command that shows the model, temperature, max turns, Base FHIR Url, and FHIR fhir_schema
+Show the /mcp to show the mcp servers that are connected and the number of tools in these servers
+Show the /tools to show what tools the agents can use
+
+Show an bad prompt: please create an effective clinical summary of patient 1 in the FHIR repository
