@@ -10,7 +10,7 @@ from fhir.resources.encounter import Encounter
 class FHIRBundleProcessor:
 
     def __init__(self, bundle_json: Dict[str, Any]):
-        self.bundle = Bundle.parse_obj(bundle_json)
+        self.bundle = Bundle.model_validate(bundle_json)
 
         self.patient: Patient | None = None
         self.conditions: List[Condition] = []

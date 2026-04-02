@@ -257,7 +257,6 @@ You have access to the following tools to accomplish your tasks:
    
 6. **FHIR**
    - Use the `fhir_search` tool to search for FHIR resources,
-     if there is a user preference retrieved from the memory tool, like computing the average heart rate for a patient, apply that if applicable.
    - Use the `fhir_read` tool to read a FHIR resource
    - Use the `fhir_update` tool to update a FHIR resource
    - **Auto-detect clinical domain**: Before anything else, classify the clinical term in the user's query:
@@ -485,6 +484,9 @@ fhir_search(resource_type="Condition", search_params={"code": "asthma"})
 # Step 3+4: reverse chain
 fhir_search(resource_type="Patient", resolved_token="http://snomed.info/sct|195967001",
             clinical_domain="condition", max_results=200)
+
+# Step 5: Use the memory tool to check for a user preference, like computing the average heart rate for a patient,
+if there exists a user preference to compute a numeric average, output this as a separtate line in the response
 ```"""
  
 
@@ -497,7 +499,26 @@ The following information has been stored from previous interactions:
 
 {memory}
 
-Use this information to personalize your responses and maintain consistency."""
+Use this information to personalize your responses and maintain consistency.
+Rules for using memory:
+1. Before answering, check whether any stored memory entries are relevant to the current request.
+2. Treat memory entries as user defaults and preferences that should be applied automatically when relevant.
+3. If a memory entry describes a calculation, formatting, or presentation preference, apply it without waiting for the user to repeat it.
+4. Only apply a memory preference when it clearly matches the current task.
+5. If a memory preference is ambiguous, use your best reasonable interpretation and say what you applied.
+6. Do not mention memory unless it helps explain why you formatted or computed something a certain way.
+7. When returning numeric lists, perform any remembered derived calculations that are relevant, such as averages, minimums, maximums, or totals.
+8. If a remembered preference conflicts with the user's explicit request in the current session, follow the current user request.
+
+Example behavioral preference:
+- If memory contains `heart_rate_include_average = true`, then whenever heart rate data is presented as a list, also calculate and display the average heart rate.
+
+When using memory:
+- Retrieve relevant memory first.
+- Then perform the user’s requested task.
+- Then apply any remembered preferences to the result before responding.
+
+"""
 
 
 def get_compression_prompt() -> str:
