@@ -1,10 +1,13 @@
 import json
+import logging
 from typing import Any
 from config.config import Config
 from tools.base import Tool, ToolInvocation, ToolKind, ToolResult
 from tools.mcp.client import MCPClient, MCPToolInfo
 from utils.codes.snomed import lookup_snomed
 from utils.paths import resolve_path
+
+logger = logging.getLogger(__name__)
 
 
 class MCPTool(Tool):
@@ -53,7 +56,8 @@ class MCPTool(Tool):
         )
 
     def _local_snomed_fallback(self, invocation: ToolInvocation, error_text: str) -> ToolResult | None:
-        if self._tool_info.name != "snomed_search":
+        tool_identifiers = {self._tool_info.name, self.name}
+        if not any(str(tool_name).endswith("snomed_search") for tool_name in tool_identifiers):
             return None
         if not self._should_fallback_to_local_snomed(error_text):
             return None
@@ -81,6 +85,10 @@ class MCPTool(Tool):
             ),
             "original_error": error_text,
         }
+        logger.info(
+            "SNOMED fallback used for query '%s' via local map after MCP error.",
+            query,
+        )
         return ToolResult.success_result(json.dumps(payload, indent=2))
 
     async def execute(self, invocation: ToolInvocation) -> ToolResult:
