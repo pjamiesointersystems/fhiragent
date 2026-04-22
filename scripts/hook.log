@@ -564,3 +564,5 @@
 [HOOK] {"timestamp": "2026-04-08T10:12:44.354177", "trigger": "before_agent", "cwd": "/Users/pjamieso/claude/ai-agent", "tool_name": null, "user_message": "get all heart rate observations on patient 4", "error": null}
 [HOOK] {"timestamp": "2026-04-08T10:12:45.795742", "trigger": "before_tool", "cwd": "/Users/pjamieso/claude/ai-agent", "tool_name": "fhir_search", "user_message": null, "error": null}
 [HOOK] {"timestamp": "2026-04-08T10:13:15.768049", "trigger": "before_agent", "cwd": "/Users/pjamieso/claude/ai-agent", "tool_name": null, "user_message": "can you tell me what is the average heart rate for this patient?", "error": null}
+[HOOK] {"timestamp": "2026-04-22T08:03:59.498386", "trigger": "before_agent", "cwd": "/Users/pjamieso/claude/ai-agent", "tool_name": null, "user_message": "find all patients in the fhir repository with type 2 diabetes", "error": null}
+[HOOK] {"timestamp": "2026-04-22T08:04:02.838228", "trigger": "before_tool", "cwd": "/Users/pjamieso/claude/ai-agent", "tool_name": "medical-terminologies__snomed_search", "user_message": null, "error": null}
