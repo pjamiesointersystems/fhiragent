@@ -46,6 +46,7 @@ class SnomedLookup:
         # Core entries: normalized_term -> code
         defaults = {
             "hypertension": "38341003",
+            "type 2 diabetes": "44054006",
             "type 2 diabetes mellitus": "44054006",
             "diabetes mellitus type 2": "44054006",
             "type two diabetes mellitus": "44054006",
