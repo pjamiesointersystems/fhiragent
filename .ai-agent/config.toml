@@ -26,9 +26,9 @@ command='python3 ./scripts/test_tool.py'
 
 [mcp_servers.filesystem]
 command = "npx"
-args =['-y', '@modelcontextprotocol/server-filesystem', '/Users/pjamieso/claude/ai-agent', '/tmp']
+args =['-y', '@modelcontextprotocol/server-filesystem', '.', '/tmp']
 
 [mcp_servers.medical-terminologies]
-command = "/opt/homebrew/bin/npx"
+command = "npx"
 args = ["-y", "medical-terminologies-mcp"]
 

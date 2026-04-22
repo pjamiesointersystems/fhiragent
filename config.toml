@@ -1,3 +1,10 @@
+hooks_enabled = true
+allowed_tools = ["edit", "fhir_everything", "fhir_read", "fhir_search", "fhir_update", "glob", "list_dir",
+"read_file", "shell", "todos", "web_fetch", "web_search", "write_file", "memory",
+"subagent_fhir_summarizer", "medical-terminologies__snomed_search", "medical-terminologies__loinc_search", "medical-terminologies__rxnorm_search"]
+
+
+
 [model]
 name = "gpt-4.1-mini"
 
@@ -9,4 +16,22 @@ auth = "BasicAuth"
 username = "SYS"
 password = "ISCDEMO"
 
+
+[[hooks]]
+name='test_before_tool'
+trigger='before_tool'
+command='python3 ./scripts/test_tool.py'
+
+[[hooks]]
+name='test_before_agent'
+trigger='before_agent'
+command='python3 ./scripts/test_tool.py'
+
+[mcp_servers.filesystem]
+command = "npx"
+args =['-y', '@modelcontextprotocol/server-filesystem', '/app/ai-agent', '/tmp']
+
+[mcp_servers.medical-terminologies]
+command = "/opt/homebrew/bin/npx"
+args = ["-y", "medical-terminologies-mcp"]
 
