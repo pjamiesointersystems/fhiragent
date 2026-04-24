@@ -22,7 +22,7 @@ class FHIRUpdateParams(BaseModel):
             "If an intermediate node is an array, the tool will iterate array members."
         ),
     )
-    old_value: Any = Field(..., description="The exact value to replace (primitive or JSON-serializable object)")
+    old_value: Any = Field(..., description="The value to replace (primitive or JSON-serializable object)")
     new_value: Any = Field(..., description="Replacement value (must be JSON-serializable)")
     timeout: int = Field(30, ge=5, le=120, description="Request timeout in seconds")
     accept: str = Field(
