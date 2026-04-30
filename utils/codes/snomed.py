@@ -166,6 +166,11 @@ class SnomedLookup:
             "systemic lupus erythematosus": "55464009",
             "lyme disease": "102098004",
             "tuberculosis": "56717001",
+            "allegry to peanuts": "91935009",
+            "peanut allergy": "91935009",
+            "soy allergy": "782594005",
+            "cow's milk allergy": "782555009",
+           
         }
 
         for term, code in defaults.items():
